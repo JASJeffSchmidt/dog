@@ -45,6 +45,13 @@ impl Wire for TXT {
                 if next_length < 255 {
                     break;
                 }
+                else if total_length >= stated_length {
+                    // If we've read a chunk with length 255 and we've now consumed
+                    // all the stated bytes, stop here. Don't try to read another
+                    // length byte as we've reached the end of the record.
+                    trace!("Got length 255 and reached stated_length, stopping");
+                    break;
+                }
                 else {
                     trace!("Got length 255, so looping");
                 }
@@ -227,5 +234,24 @@ mod test {
 
         assert_eq!(TXT::read(23, &mut Cursor::new(buf)),
                    Err(WireError::IO));
+    }
+
+    #[test]
+    fn exact_256_byte_boundary() {
+        // This reproduces the bug: a TXT record where the character string data
+        // ends at exactly the stated_length boundary with a 255-byte chunk.
+        // Before the fix, the code would try to read another length byte after
+        // the 255-byte chunk, causing an IO error or length mismatch.
+        let mut buf = vec![0xFF]; // length byte = 255
+        buf.extend(vec![0x41; 255]); // 255 'A's
+        
+        // The stated_length is 256 (the exact size of the buffer)
+        // With the special handling for length=255 (continuation), this creates
+        // a message with 255 A's (no additional chunk needed)
+        let result = TXT::read(256, &mut Cursor::new(&buf));
+        assert!(result.is_ok(), "Should parse successfully at boundary");
+        let txt = result.unwrap();
+        assert_eq!(txt.messages.len(), 1);
+        assert_eq!(txt.messages[0].len(), 255);
     }
 }
