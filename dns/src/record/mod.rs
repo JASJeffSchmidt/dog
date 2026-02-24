@@ -42,6 +42,9 @@ pub use self::naptr::NAPTR;
 mod ns;
 pub use self::ns::NS;
 
+mod nsec;
+pub use self::nsec::NSEC;
+
 mod openpgpkey;
 pub use self::openpgpkey::OPENPGPKEY;
 
@@ -94,6 +97,7 @@ pub enum Record {
     MX(MX),
     NAPTR(NAPTR),
     NS(NS),
+    NSEC(NSEC),
     OPENPGPKEY(OPENPGPKEY),
     // OPT is not included here.
     PTR(PTR),
@@ -135,6 +139,7 @@ pub enum RecordType {
     MX,
     NAPTR,
     NS,
+    NSEC,
     OPENPGPKEY,
     PTR,
     RRSIG,
@@ -172,6 +177,7 @@ impl From<u16> for RecordType {
         try_record!(MX);
         try_record!(NAPTR);
         try_record!(NS);
+        try_record!(NSEC);
         try_record!(OPENPGPKEY);
         // OPT is handled separately
         try_record!(PTR);
@@ -214,6 +220,7 @@ impl RecordType {
         try_record!(MX);
         try_record!(NAPTR);
         try_record!(NS);
+        try_record!(NSEC);
         try_record!(OPENPGPKEY);
         // OPT is elsewhere
         try_record!(PTR);
@@ -244,6 +251,7 @@ impl RecordType {
             Self::MX          => MX::RR_TYPE,
             Self::NAPTR       => NAPTR::RR_TYPE,
             Self::NS          => NS::RR_TYPE,
+            Self::NSEC        => NSEC::RR_TYPE,
             Self::OPENPGPKEY  => OPENPGPKEY::RR_TYPE,
             // Wherefore art thou, OPT
             Self::PTR         => PTR::RR_TYPE,

@@ -194,6 +194,7 @@ impl Record {
             RecordType::MX          => read_record!(MX),
             RecordType::NAPTR       => read_record!(NAPTR),
             RecordType::NS          => read_record!(NS),
+            RecordType::NSEC        => read_record!(NSEC),
             RecordType::OPENPGPKEY  => read_record!(OPENPGPKEY),
             RecordType::PTR         => read_record!(PTR),
             RecordType::RRSIG       => read_record!(RRSIG),

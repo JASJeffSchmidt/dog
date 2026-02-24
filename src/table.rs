@@ -127,6 +127,7 @@ impl Table {
             Record::MX(_)          => self.colours.mx.paint("MX"),
             Record::NAPTR(_)       => self.colours.ns.paint("NAPTR"),
             Record::NS(_)          => self.colours.ns.paint("NS"),
+            Record::NSEC(_)        => self.colours.nsec.paint("NSEC"),
             Record::OPENPGPKEY(_)  => self.colours.openpgpkey.paint("OPENPGPKEY"),
             Record::PTR(_)         => self.colours.ptr.paint("PTR"),
             Record::RRSIG(_)       => self.colours.rrsig.paint("RRSIG"),

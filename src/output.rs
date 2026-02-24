@@ -257,6 +257,12 @@ impl TextFormat {
             Record::NS(ns) => {
                 format!("{:?}", ns.nameserver.to_string())
             }
+            Record::NSEC(nsec) => {
+                format!("{:?} {}",
+                    nsec.next_domain.to_string(),
+                    nsec.type_names().join(" "),
+                )
+            }
             Record::OPENPGPKEY(opgp) => {
                 format!("{:?}", opgp.base64_key())
             }
@@ -432,6 +438,7 @@ fn json_record_type_name(record: RecordType) -> JsonValue {
         RecordType::MX          => "MX".into(),
         RecordType::NAPTR       => "NAPTR".into(),
         RecordType::NS          => "NS".into(),
+        RecordType::NSEC        => "NSEC".into(),
         RecordType::OPENPGPKEY  => "OPENPGPKEY".into(),
         RecordType::PTR         => "PTR".into(),
         RecordType::RRSIG       => "RRSIG".into(),
@@ -466,6 +473,7 @@ fn json_record_name(record: &Record) -> JsonValue {
         Record::MX(_)          => "MX".into(),
         Record::NAPTR(_)       => "NAPTR".into(),
         Record::NS(_)          => "NS".into(),
+        Record::NSEC(_)        => "NSEC".into(),
         Record::OPENPGPKEY(_)  => "OPENPGPKEY".into(),
         Record::PTR(_)         => "PTR".into(),
         Record::RRSIG(_)       => "RRSIG".into(),
@@ -588,6 +596,15 @@ fn json_record_data(record: Record) -> JsonValue {
         Record::NS(ns) => {
             object! {
                 "nameserver": ns.nameserver.to_string(),
+            }
+        }
+        Record::NSEC(nsec) => {
+            let type_names: Vec<JsonValue> = nsec.type_names().into_iter()
+                .map(|s| s.into())
+                .collect();
+            object! {
+                "next_domain": nsec.next_domain.to_string(),
+                "types": type_names,
             }
         }
         Record::OPENPGPKEY(opgp) => {

@@ -67,7 +67,6 @@ static TYPES: &[(&str, u16)] = &[
     ("IXFR",      251),
     ("KEY",        25),
     ("KX",         36),
-    ("NSEC",       47),
     ("NSEC3",      50),
     ("NSEC3PARAM", 51),
     ("OPENPGPKEY", 61),
@@ -87,8 +86,8 @@ mod test {
 
     #[test]
     fn known() {
-        assert_eq!(UnknownQtype::from(47).to_string(),
-                   String::from("NSEC"));
+        assert_eq!(UnknownQtype::from(50).to_string(),
+                   String::from("NSEC3"));
     }
 
     #[test]
