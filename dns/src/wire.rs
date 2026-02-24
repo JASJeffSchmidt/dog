@@ -186,6 +186,7 @@ impl Record {
             RecordType::CAA         => read_record!(CAA),
             RecordType::CNAME       => read_record!(CNAME),
             RecordType::DNSKEY      => read_record!(DNSKEY),
+            RecordType::DS          => read_record!(DS),
             RecordType::EUI48       => read_record!(EUI48),
             RecordType::EUI64       => read_record!(EUI64),
             RecordType::HINFO       => read_record!(HINFO),

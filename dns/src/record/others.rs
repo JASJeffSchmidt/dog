@@ -62,7 +62,6 @@ static TYPES: &[(&str, u16)] = &[
     ("DHCID",      49),
     ("DLV",     32769),
     ("DNAME",      39),
-    ("DS",         43),
     ("HIP",        55),
     ("IPSECKEY",   45),
     ("IXFR",      251),

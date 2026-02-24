@@ -18,6 +18,9 @@ pub use self::cname::CNAME;
 mod dnskey;
 pub use self::dnskey::DNSKEY;
 
+mod ds;
+pub use self::ds::DS;
+
 mod eui48;
 pub use self::eui48::EUI48;
 
@@ -80,6 +83,7 @@ pub enum Record {
     CAA(CAA),
     CNAME(CNAME),
     DNSKEY(DNSKEY),
+    DS(DS),
     EUI48(EUI48),
     EUI64(EUI64),
     HINFO(HINFO),
@@ -119,6 +123,7 @@ pub enum RecordType {
     CAA,
     CNAME,
     DNSKEY,
+    DS,
     EUI48,
     EUI64,
     HINFO,
@@ -154,6 +159,7 @@ impl From<u16> for RecordType {
         try_record!(CAA);
         try_record!(CNAME);
         try_record!(DNSKEY);
+        try_record!(DS);
         try_record!(EUI48);
         try_record!(EUI64);
         try_record!(HINFO);
@@ -194,6 +200,7 @@ impl RecordType {
         try_record!(CAA);
         try_record!(CNAME);
         try_record!(DNSKEY);
+        try_record!(DS);
         try_record!(EUI48);
         try_record!(EUI64);
         try_record!(HINFO);
@@ -222,6 +229,7 @@ impl RecordType {
             Self::CAA         => CAA::RR_TYPE,
             Self::CNAME       => CNAME::RR_TYPE,
             Self::DNSKEY      => DNSKEY::RR_TYPE,
+            Self::DS          => DS::RR_TYPE,
             Self::EUI48       => EUI48::RR_TYPE,
             Self::EUI64       => EUI64::RR_TYPE,
             Self::HINFO       => HINFO::RR_TYPE,

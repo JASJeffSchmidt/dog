@@ -214,6 +214,14 @@ impl TextFormat {
                     dnskey.base64_public_key(),
                 )
             }
+            Record::DS(ds) => {
+                format!("{} {} {} {}",
+                    ds.key_tag,
+                    ds.algorithm,
+                    ds.digest_type,
+                    ds.hex_digest(),
+                )
+            }
             Record::EUI48(eui48) => {
                 format!("{:?}", eui48.formatted_address())
             }
@@ -407,6 +415,7 @@ fn json_record_type_name(record: RecordType) -> JsonValue {
         RecordType::CAA         => "CAA".into(),
         RecordType::CNAME       => "CNAME".into(),
         RecordType::DNSKEY      => "DNSKEY".into(),
+        RecordType::DS          => "DS".into(),
         RecordType::EUI48       => "EUI48".into(),
         RecordType::EUI64       => "EUI64".into(),
         RecordType::HINFO       => "HINFO".into(),
@@ -439,6 +448,7 @@ fn json_record_name(record: &Record) -> JsonValue {
         Record::CAA(_)         => "CAA".into(),
         Record::CNAME(_)       => "CNAME".into(),
         Record::DNSKEY(_)      => "DNSKEY".into(),
+        Record::DS(_)          => "DS".into(),
         Record::EUI48(_)       => "EUI48".into(),
         Record::EUI64(_)       => "EUI64".into(),
         Record::HINFO(_)       => "HINFO".into(),
@@ -502,6 +512,21 @@ fn json_record_data(record: Record) -> JsonValue {
                 data["algorithm_name"] = name.into();
             }
             data["public_key"] = dnskey.base64_public_key().into();
+            data
+        }
+        Record::DS(ds) => {
+            let mut data = object! {
+                "key_tag": ds.key_tag,
+                "algorithm": ds.algorithm,
+            };
+            if let Some(name) = ds.algorithm_name() {
+                data["algorithm_name"] = name.into();
+            }
+            data["digest_type"] = ds.digest_type.into();
+            if let Some(name) = ds.digest_type_name() {
+                data["digest_type_name"] = name.into();
+            }
+            data["digest"] = ds.hex_digest().into();
             data
         }
         Record::EUI48(eui48) => {
