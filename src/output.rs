@@ -552,6 +552,12 @@ fn json_record_data(record: Record) -> JsonValue {
         Record::SOA(soa) => {
             object! {
                 "mname": soa.mname.to_string(),
+                "rname": soa.rname.to_string(),
+                "serial": soa.serial,
+                "refresh": soa.refresh_interval,
+                "retry": soa.retry_interval,
+                "expire": soa.expire_limit,
+                "minimum": soa.minimum_ttl,
             }
         }
         Record::SRV(srv) => {
