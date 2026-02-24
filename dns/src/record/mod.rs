@@ -51,6 +51,9 @@ pub use self::opt::OPT;
 mod ptr;
 pub use self::ptr::PTR;
 
+mod rrsig;
+pub use self::rrsig::RRSIG;
+
 mod sshfp;
 pub use self::sshfp::SSHFP;
 
@@ -94,6 +97,7 @@ pub enum Record {
     OPENPGPKEY(OPENPGPKEY),
     // OPT is not included here.
     PTR(PTR),
+    RRSIG(RRSIG),
     SSHFP(SSHFP),
     SOA(SOA),
     SRV(SRV),
@@ -133,6 +137,7 @@ pub enum RecordType {
     NS,
     OPENPGPKEY,
     PTR,
+    RRSIG,
     SSHFP,
     SOA,
     SRV,
@@ -170,6 +175,7 @@ impl From<u16> for RecordType {
         try_record!(OPENPGPKEY);
         // OPT is handled separately
         try_record!(PTR);
+        try_record!(RRSIG);
         try_record!(SSHFP);
         try_record!(SOA);
         try_record!(SRV);
@@ -211,6 +217,7 @@ impl RecordType {
         try_record!(OPENPGPKEY);
         // OPT is elsewhere
         try_record!(PTR);
+        try_record!(RRSIG);
         try_record!(SSHFP);
         try_record!(SOA);
         try_record!(SRV);
@@ -240,6 +247,7 @@ impl RecordType {
             Self::OPENPGPKEY  => OPENPGPKEY::RR_TYPE,
             // Wherefore art thou, OPT
             Self::PTR         => PTR::RR_TYPE,
+            Self::RRSIG       => RRSIG::RR_TYPE,
             Self::SSHFP       => SSHFP::RR_TYPE,
             Self::SOA         => SOA::RR_TYPE,
             Self::SRV         => SRV::RR_TYPE,

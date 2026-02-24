@@ -263,6 +263,15 @@ impl TextFormat {
             Record::PTR(ptr) => {
                 format!("{:?}", ptr.cname.to_string())
             }
+            Record::RRSIG(rrsig) => {
+                format!("{} {} {} {:?} {}",
+                    rrsig.type_covered_name().unwrap_or("?"),
+                    rrsig.algorithm,
+                    rrsig.key_tag,
+                    rrsig.signer_name.to_string(),
+                    rrsig.base64_signature(),
+                )
+            }
             Record::SSHFP(sshfp) => {
                 format!("{} {} {}",
                     sshfp.algorithm,
@@ -425,6 +434,7 @@ fn json_record_type_name(record: RecordType) -> JsonValue {
         RecordType::NS          => "NS".into(),
         RecordType::OPENPGPKEY  => "OPENPGPKEY".into(),
         RecordType::PTR         => "PTR".into(),
+        RecordType::RRSIG       => "RRSIG".into(),
         RecordType::SOA         => "SOA".into(),
         RecordType::SRV         => "SRV".into(),
         RecordType::SSHFP       => "SSHFP".into(),
@@ -458,6 +468,7 @@ fn json_record_name(record: &Record) -> JsonValue {
         Record::NS(_)          => "NS".into(),
         Record::OPENPGPKEY(_)  => "OPENPGPKEY".into(),
         Record::PTR(_)         => "PTR".into(),
+        Record::RRSIG(_)       => "RRSIG".into(),
         Record::SOA(_)         => "SOA".into(),
         Record::SRV(_)         => "SRV".into(),
         Record::SSHFP(_)       => "SSHFP".into(),
@@ -588,6 +599,26 @@ fn json_record_data(record: Record) -> JsonValue {
             object! {
                 "cname": ptr.cname.to_string(),
             }
+        }
+        Record::RRSIG(rrsig) => {
+            let mut data = object! {
+                "type_covered": rrsig.type_covered,
+            };
+            if let Some(name) = rrsig.type_covered_name() {
+                data["type_covered_name"] = name.into();
+            }
+            data["algorithm"] = rrsig.algorithm.into();
+            if let Some(name) = rrsig.algorithm_name() {
+                data["algorithm_name"] = name.into();
+            }
+            data["labels"] = rrsig.labels.into();
+            data["original_ttl"] = rrsig.original_ttl.into();
+            data["signature_expiration"] = rrsig.signature_expiration.into();
+            data["signature_inception"] = rrsig.signature_inception.into();
+            data["key_tag"] = rrsig.key_tag.into();
+            data["signer_name"] = rrsig.signer_name.to_string().into();
+            data["signature"] = rrsig.base64_signature().into();
+            data
         }
         Record::SSHFP(sshfp) => {
             object! {

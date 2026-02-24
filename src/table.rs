@@ -129,6 +129,7 @@ impl Table {
             Record::NS(_)          => self.colours.ns.paint("NS"),
             Record::OPENPGPKEY(_)  => self.colours.openpgpkey.paint("OPENPGPKEY"),
             Record::PTR(_)         => self.colours.ptr.paint("PTR"),
+            Record::RRSIG(_)       => self.colours.rrsig.paint("RRSIG"),
             Record::SSHFP(_)       => self.colours.sshfp.paint("SSHFP"),
             Record::SOA(_)         => self.colours.soa.paint("SOA"),
             Record::SRV(_)         => self.colours.srv.paint("SRV"),

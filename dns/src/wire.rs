@@ -196,6 +196,7 @@ impl Record {
             RecordType::NS          => read_record!(NS),
             RecordType::OPENPGPKEY  => read_record!(OPENPGPKEY),
             RecordType::PTR         => read_record!(PTR),
+            RecordType::RRSIG       => read_record!(RRSIG),
             RecordType::SSHFP       => read_record!(SSHFP),
             RecordType::SOA         => read_record!(SOA),
             RecordType::SRV         => read_record!(SRV),
