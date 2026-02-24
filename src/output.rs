@@ -206,6 +206,14 @@ impl TextFormat {
             Record::CNAME(cname) => {
                 format!("{:?}", cname.domain.to_string())
             }
+            Record::DNSKEY(dnskey) => {
+                format!("{} {} {} {}",
+                    dnskey.flags,
+                    dnskey.protocol,
+                    dnskey.algorithm,
+                    dnskey.base64_public_key(),
+                )
+            }
             Record::EUI48(eui48) => {
                 format!("{:?}", eui48.formatted_address())
             }
@@ -398,6 +406,7 @@ fn json_record_type_name(record: RecordType) -> JsonValue {
         RecordType::AAAA        => "AAAA".into(),
         RecordType::CAA         => "CAA".into(),
         RecordType::CNAME       => "CNAME".into(),
+        RecordType::DNSKEY      => "DNSKEY".into(),
         RecordType::EUI48       => "EUI48".into(),
         RecordType::EUI64       => "EUI64".into(),
         RecordType::HINFO       => "HINFO".into(),
@@ -429,6 +438,7 @@ fn json_record_name(record: &Record) -> JsonValue {
         Record::AAAA(_)        => "AAAA".into(),
         Record::CAA(_)         => "CAA".into(),
         Record::CNAME(_)       => "CNAME".into(),
+        Record::DNSKEY(_)      => "DNSKEY".into(),
         Record::EUI48(_)       => "EUI48".into(),
         Record::EUI64(_)       => "EUI64".into(),
         Record::HINFO(_)       => "HINFO".into(),
@@ -481,6 +491,18 @@ fn json_record_data(record: Record) -> JsonValue {
             object! {
                 "domain": cname.domain.to_string(),
             }
+        }
+        Record::DNSKEY(dnskey) => {
+            let mut data = object! {
+                "flags": dnskey.flags,
+                "protocol": dnskey.protocol,
+                "algorithm": dnskey.algorithm,
+            };
+            if let Some(name) = dnskey.algorithm_name() {
+                data["algorithm_name"] = name.into();
+            }
+            data["public_key"] = dnskey.base64_public_key().into();
+            data
         }
         Record::EUI48(eui48) => {
             object! {

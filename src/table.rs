@@ -118,6 +118,7 @@ impl Table {
             Record::AAAA(_)        => self.colours.aaaa.paint("AAAA"),
             Record::CAA(_)         => self.colours.caa.paint("CAA"),
             Record::CNAME(_)       => self.colours.cname.paint("CNAME"),
+            Record::DNSKEY(_)      => self.colours.dnskey.paint("DNSKEY"),
             Record::EUI48(_)       => self.colours.eui48.paint("EUI48"),
             Record::EUI64(_)       => self.colours.eui64.paint("EUI64"),
             Record::HINFO(_)       => self.colours.hinfo.paint("HINFO"),
