@@ -420,6 +420,9 @@ impl ProtocolTweaks {
                 "cd" | "checking-disabled" => {
                     tweaks.set_checking_disabled_flag = true;
                 }
+                "do" | "dnssec-ok" => {
+                    tweaks.set_dnssec_ok_flag = true;
+                }
                 otherwise => {
                     if let Some(remaining_num) = tweak_str.strip_prefix("bufsize=") {
                         match remaining_num.parse() {
@@ -780,6 +783,107 @@ mod test {
         let options = Options::getopts(&[ "dom.ain", "-Z", "aa", "-Z", "cd" ]).unwrap();
         assert_eq!(options.requests.protocol_tweaks.set_authoritative_flag, true);
         assert_eq!(options.requests.protocol_tweaks.set_checking_disabled_flag, true);
+    }
+
+    // --- DNSSEC OK (DO) flag tests ---
+
+    #[test]
+    fn dnssec_ok_tweak_short_form() {
+        let options = Options::getopts(&[ "dom.ain", "-Z", "do" ]).unwrap();
+        assert_eq!(options.requests.protocol_tweaks.set_dnssec_ok_flag, true);
+    }
+
+    #[test]
+    fn dnssec_ok_tweak_long_form() {
+        let options = Options::getopts(&[ "dom.ain", "-Z", "dnssec-ok" ]).unwrap();
+        assert_eq!(options.requests.protocol_tweaks.set_dnssec_ok_flag, true);
+    }
+
+    #[test]
+    fn dnssec_ok_default_is_false() {
+        let options = Options::getopts(&[ "dom.ain" ]).unwrap();
+        assert_eq!(options.requests.protocol_tweaks.set_dnssec_ok_flag, false);
+    }
+
+    #[test]
+    fn dnssec_ok_with_ad() {
+        let options = Options::getopts(&[ "dom.ain", "-Z", "ad", "-Z", "do" ]).unwrap();
+        assert_eq!(options.requests.protocol_tweaks.set_authentic_flag, true);
+        assert_eq!(options.requests.protocol_tweaks.set_dnssec_ok_flag, true);
+    }
+
+    #[test]
+    fn dnssec_ok_with_cd() {
+        let options = Options::getopts(&[ "dom.ain", "-Z", "do", "-Z", "cd" ]).unwrap();
+        assert_eq!(options.requests.protocol_tweaks.set_dnssec_ok_flag, true);
+        assert_eq!(options.requests.protocol_tweaks.set_checking_disabled_flag, true);
+    }
+
+    #[test]
+    fn dnssec_ok_with_all_flags() {
+        let options = Options::getopts(&[ "dom.ain", "-Z", "aa", "-Z", "ad", "-Z", "cd", "-Z", "do" ]).unwrap();
+        assert_eq!(options.requests.protocol_tweaks.set_authoritative_flag, true);
+        assert_eq!(options.requests.protocol_tweaks.set_authentic_flag, true);
+        assert_eq!(options.requests.protocol_tweaks.set_checking_disabled_flag, true);
+        assert_eq!(options.requests.protocol_tweaks.set_dnssec_ok_flag, true);
+    }
+
+    #[test]
+    fn dnssec_ok_with_bufsize() {
+        let options = Options::getopts(&[ "dom.ain", "-Z", "do", "-Z", "bufsize=4096" ]).unwrap();
+        assert_eq!(options.requests.protocol_tweaks.set_dnssec_ok_flag, true);
+        assert_eq!(options.requests.protocol_tweaks.udp_payload_size, Some(4096));
+    }
+
+    #[test]
+    fn dnssec_ok_with_edns_show() {
+        let options = Options::getopts(&[ "dom.ain", "--edns", "show", "-Z", "do" ]).unwrap();
+        assert_eq!(options.requests.edns, UseEDNS::SendAndShow);
+        assert_eq!(options.requests.protocol_tweaks.set_dnssec_ok_flag, true);
+    }
+
+    #[test]
+    fn dnssec_ok_with_json() {
+        let options = Options::getopts(&[ "dom.ain", "--json", "-Z", "do" ]).unwrap();
+        assert_eq!(options.format, OutputFormat::JSON);
+        assert_eq!(options.requests.protocol_tweaks.set_dnssec_ok_flag, true);
+    }
+
+    #[test]
+    fn dnssec_ok_does_not_affect_other_flags() {
+        let options = Options::getopts(&[ "dom.ain", "-Z", "do" ]).unwrap();
+        assert_eq!(options.requests.protocol_tweaks.set_dnssec_ok_flag, true);
+        assert_eq!(options.requests.protocol_tweaks.set_authoritative_flag, false);
+        assert_eq!(options.requests.protocol_tweaks.set_authentic_flag, false);
+        assert_eq!(options.requests.protocol_tweaks.set_checking_disabled_flag, false);
+        assert_eq!(options.requests.protocol_tweaks.udp_payload_size, None);
+    }
+
+    #[test]
+    fn dnssec_ok_duplicate_is_ok() {
+        let options = Options::getopts(&[ "dom.ain", "-Z", "do", "-Z", "do" ]).unwrap();
+        assert_eq!(options.requests.protocol_tweaks.set_dnssec_ok_flag, true);
+    }
+
+    #[test]
+    fn dnssec_ok_both_aliases() {
+        let options = Options::getopts(&[ "dom.ain", "-Z", "do", "-Z", "dnssec-ok" ]).unwrap();
+        assert_eq!(options.requests.protocol_tweaks.set_dnssec_ok_flag, true);
+    }
+
+    #[test]
+    fn dnssec_ok_with_record_type() {
+        let options = Options::getopts(&[ "dom.ain", "DNSKEY", "-Z", "do" ]).unwrap();
+        assert_eq!(options.requests.inputs.record_types, vec![ RecordType::DNSKEY ]);
+        assert_eq!(options.requests.protocol_tweaks.set_dnssec_ok_flag, true);
+    }
+
+    #[test]
+    fn dnssec_ok_with_nameserver() {
+        let options = Options::getopts(&[ "dom.ain", "@1.1.1.1", "-Z", "do" ]).unwrap();
+        assert_eq!(options.requests.inputs.resolver_types,
+                   vec![ ResolverType::Specific("1.1.1.1".into()) ]);
+        assert_eq!(options.requests.protocol_tweaks.set_dnssec_ok_flag, true);
     }
 
     #[test]

@@ -56,6 +56,9 @@ pub struct ProtocolTweaks {
     /// Set the `CD` (Checking Disabled) flag in the header of each request.
     pub set_checking_disabled_flag: bool,
 
+    /// Set the `DO` (DNSSEC OK) flag in the EDNS OPT record of each request.
+    pub set_dnssec_ok_flag: bool,
+
     /// Set the buffer size field in the OPT record of each request.
     pub udp_payload_size: Option<u16>,
 }
@@ -160,9 +163,12 @@ impl ProtocolTweaks {
         }
     }
 
-    /// Set the payload size field in the outgoing OPT record, if the user has
-    /// requested to do so.
+    /// Set fields in the outgoing OPT record based on the user's requested tweaks.
     pub fn set_request_opt_fields(self, opt: &mut dns::record::OPT) {
+        if self.set_dnssec_ok_flag {
+            opt.flags |= 0x8000;
+        }
+
         if let Some(bufsize) = self.udp_payload_size {
             opt.udp_payload_size = bufsize;
         }
