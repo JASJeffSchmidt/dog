@@ -90,8 +90,10 @@ The recommended way to install Rust for development is from the [official downlo
 
 To build, download the source code and run:
 
-    $ cargo build
-    $ cargo test
+    $ cargo build --features with_nativetls_vendored
+    $ cargo test --features with_nativetls_vendored
+
+The `with_nativetls_vendored` feature statically links OpenSSL, avoiding the need to install `libssl-dev`.
 
 - The [just](https://github.com/casey/just) command runner can be used to run some helpful development commands, in a manner similar to `make`.
 Run `just --list` to get an overview of what’s available.
