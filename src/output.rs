@@ -4,7 +4,7 @@ use std::fmt;
 use std::time::Duration;
 use std::env;
 
-use dns::{Response, Query, Answer, QClass, ErrorCode, WireError, MandatedLength};
+use dns::{Response, Query, Answer, QClass, ErrorCode, Flags, Opcode, WireError, MandatedLength};
 use dns::record::{Record, RecordType, UnknownQtype, OPT};
 use dns_transport::Error as TransportError;
 use json::{object, JsonValue};
@@ -105,6 +105,7 @@ impl OutputFormat {
 
                 for response in responses {
                     let json = object! {
+                        "flags": json_flags(response.flags),
                         "queries": json_queries(response.queries),
                         "answers": json_answers(response.answers),
                         "authorities": json_answers(response.authorities),
@@ -366,6 +367,38 @@ fn format_duration_hms(seconds: u32) -> String {
             (seconds % 86400) / 3600,
             (seconds % 3600) / 60,
             seconds % 60)
+    }
+}
+
+/// Serialises DNS response flags as a JSON value.
+fn json_flags(flags: Flags) -> JsonValue {
+    let opcode = match flags.opcode {
+        Opcode::Query    => "QUERY".into(),
+        Opcode::Other(n) => JsonValue::from(n),
+    };
+
+    let rcode = match flags.error_code {
+        None                            => "NOERROR".into(),
+        Some(ErrorCode::FormatError)    => "FORMERR".into(),
+        Some(ErrorCode::ServerFailure)  => "SERVFAIL".into(),
+        Some(ErrorCode::NXDomain)       => "NXDOMAIN".into(),
+        Some(ErrorCode::NotImplemented) => "NOTIMP".into(),
+        Some(ErrorCode::QueryRefused)   => "REFUSED".into(),
+        Some(ErrorCode::BadVersion)     => "BADVERS".into(),
+        Some(ErrorCode::Other(n))       => JsonValue::from(n),
+        Some(ErrorCode::Private(n))     => JsonValue::from(n),
+    };
+
+    object! {
+        "qr"     : flags.response,
+        "opcode" : opcode,
+        "aa"     : flags.authoritative,
+        "tc"     : flags.truncated,
+        "rd"     : flags.recursion_desired,
+        "ra"     : flags.recursion_available,
+        "ad"     : flags.authentic_data,
+        "cd"     : flags.checking_disabled,
+        "rcode"  : rcode,
     }
 }
 
@@ -811,6 +844,25 @@ fn wire_error_message(error: WireError) -> String {
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::net::{Ipv4Addr, Ipv6Addr};
+    use dns::record::{A, AAAA, CAA, CNAME, DNSKEY, DS, EUI48, EUI64, HINFO,
+                      MX, NAPTR, NS, NSEC, OPENPGPKEY, PTR, RRSIG, SSHFP,
+                      SOA, SRV, TLSA, TXT, URI};
+    use dns::Labels;
+
+    fn default_flags() -> Flags {
+        Flags {
+            response: false,
+            opcode: Opcode::Query,
+            authoritative: false,
+            truncated: false,
+            recursion_desired: false,
+            recursion_available: false,
+            authentic_data: false,
+            checking_disabled: false,
+            error_code: None,
+        }
+    }
 
     #[test]
     fn escape_quotes() {
@@ -834,5 +886,692 @@ mod test {
     fn escape_highs() {
         assert_eq!(Ascii("pâté".as_bytes()).to_string(),
                    "\"p\\195\\162t\\195\\169\"");
+    }
+
+    // ============ json_flags tests ============
+
+    #[test]
+    fn json_flags_default() {
+        let j = json_flags(default_flags());
+        assert_eq!(j["qr"], false);
+        assert_eq!(j["opcode"], "QUERY");
+        assert_eq!(j["aa"], false);
+        assert_eq!(j["tc"], false);
+        assert_eq!(j["rd"], false);
+        assert_eq!(j["ra"], false);
+        assert_eq!(j["ad"], false);
+        assert_eq!(j["cd"], false);
+        assert_eq!(j["rcode"], "NOERROR");
+    }
+
+    #[test]
+    fn json_flags_qr() {
+        let mut f = default_flags();
+        f.response = true;
+        assert_eq!(json_flags(f)["qr"], true);
+    }
+
+    #[test]
+    fn json_flags_aa() {
+        let mut f = default_flags();
+        f.authoritative = true;
+        assert_eq!(json_flags(f)["aa"], true);
+    }
+
+    #[test]
+    fn json_flags_tc_rd_ra() {
+        let mut f = default_flags();
+        f.truncated = true;
+        f.recursion_desired = true;
+        f.recursion_available = true;
+        let j = json_flags(f);
+        assert_eq!(j["tc"], true);
+        assert_eq!(j["rd"], true);
+        assert_eq!(j["ra"], true);
+    }
+
+    #[test]
+    fn json_flags_ad_cd() {
+        let mut f = default_flags();
+        f.authentic_data = true;
+        f.checking_disabled = true;
+        let j = json_flags(f);
+        assert_eq!(j["ad"], true);
+        assert_eq!(j["cd"], true);
+    }
+
+    #[test]
+    fn json_flags_opcode_other() {
+        let mut f = default_flags();
+        f.opcode = Opcode::Other(4);
+        assert_eq!(json_flags(f)["opcode"], 4);
+    }
+
+    #[test]
+    fn json_flags_rcode_nxdomain() {
+        let mut f = default_flags();
+        f.error_code = Some(ErrorCode::NXDomain);
+        assert_eq!(json_flags(f)["rcode"], "NXDOMAIN");
+    }
+
+    #[test]
+    fn json_flags_rcode_servfail() {
+        let mut f = default_flags();
+        f.error_code = Some(ErrorCode::ServerFailure);
+        assert_eq!(json_flags(f)["rcode"], "SERVFAIL");
+    }
+
+    #[test]
+    fn json_flags_rcode_named() {
+        let cases: Vec<(ErrorCode, &str)> = vec![
+            (ErrorCode::FormatError, "FORMERR"),
+            (ErrorCode::NotImplemented, "NOTIMP"),
+            (ErrorCode::QueryRefused, "REFUSED"),
+            (ErrorCode::BadVersion, "BADVERS"),
+        ];
+        for (code, expected) in cases {
+            let mut f = default_flags();
+            f.error_code = Some(code);
+            assert_eq!(json_flags(f)["rcode"], expected);
+        }
+    }
+
+    #[test]
+    fn json_flags_rcode_other_and_private() {
+        let mut f = default_flags();
+        f.error_code = Some(ErrorCode::Other(11));
+        assert_eq!(json_flags(f)["rcode"], 11);
+
+        let mut f = default_flags();
+        f.error_code = Some(ErrorCode::Private(3841));
+        assert_eq!(json_flags(f)["rcode"], 3841);
+    }
+
+    // ============ json_class tests ============
+
+    #[test]
+    fn json_class_in() {
+        assert_eq!(json_class(QClass::IN), "IN");
+    }
+
+    #[test]
+    fn json_class_ch() {
+        assert_eq!(json_class(QClass::CH), "CH");
+    }
+
+    #[test]
+    fn json_class_hs() {
+        assert_eq!(json_class(QClass::HS), "HS");
+    }
+
+    #[test]
+    fn json_class_other() {
+        assert_eq!(json_class(QClass::Other(254)), 254);
+    }
+
+    // ============ json_record_type_name + json_record_name tests ============
+
+    #[test]
+    fn json_record_type_name_a() {
+        assert_eq!(json_record_type_name(RecordType::A), "A");
+    }
+
+    #[test]
+    fn json_record_type_name_aaaa() {
+        assert_eq!(json_record_type_name(RecordType::AAAA), "AAAA");
+    }
+
+    #[test]
+    fn json_record_type_name_heard_of() {
+        assert_eq!(json_record_type_name(RecordType::Other(UnknownQtype::HeardOf("NSEC3", 50))), "NSEC3");
+    }
+
+    #[test]
+    fn json_record_type_name_unheard_of() {
+        assert_eq!(json_record_type_name(RecordType::Other(UnknownQtype::UnheardOf(9999))), 9999);
+    }
+
+    #[test]
+    fn json_record_name_a() {
+        let record = Record::A(A { address: Ipv4Addr::new(1, 2, 3, 4) });
+        assert_eq!(json_record_name(&record), "A");
+    }
+
+    #[test]
+    fn json_record_name_other() {
+        let record = Record::Other {
+            type_number: UnknownQtype::UnheardOf(9999),
+            bytes: vec![],
+        };
+        assert_eq!(json_record_name(&record), 9999);
+    }
+
+    // ============ json_record_data tests ============
+
+    #[test]
+    fn json_record_data_a() {
+        let j = json_record_data(Record::A(A { address: Ipv4Addr::new(192, 0, 2, 1) }));
+        assert_eq!(j["address"], "192.0.2.1");
+    }
+
+    #[test]
+    fn json_record_data_aaaa() {
+        let j = json_record_data(Record::AAAA(AAAA {
+            address: Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1),
+        }));
+        assert_eq!(j["address"], "2001:db8::1");
+    }
+
+    #[test]
+    fn json_record_data_caa() {
+        let j = json_record_data(Record::CAA(CAA {
+            critical: true,
+            tag: b"issue".to_vec().into_boxed_slice(),
+            value: b"letsencrypt.org".to_vec().into_boxed_slice(),
+        }));
+        assert_eq!(j["critical"], true);
+        assert_eq!(j["tag"], "issue");
+        assert_eq!(j["value"], "letsencrypt.org");
+    }
+
+    #[test]
+    fn json_record_data_cname() {
+        let j = json_record_data(Record::CNAME(CNAME {
+            domain: Labels::encode("www.example.com").unwrap(),
+        }));
+        assert_eq!(j["domain"], "www.example.com.");
+    }
+
+    #[test]
+    fn json_record_data_dnskey() {
+        let j = json_record_data(Record::DNSKEY(DNSKEY {
+            flags: 257,
+            protocol: 3,
+            algorithm: 8,
+            public_key: vec![1, 2, 3],
+        }));
+        assert_eq!(j["flags"], 257);
+        assert_eq!(j["protocol"], 3);
+        assert_eq!(j["algorithm"], 8);
+        assert_eq!(j["algorithm_name"], "RSASHA256");
+        assert_eq!(j["public_key"], "AQID");
+    }
+
+    #[test]
+    fn json_record_data_ds() {
+        let j = json_record_data(Record::DS(DS {
+            key_tag: 40714,
+            algorithm: 13,
+            digest_type: 2,
+            digest: vec![0xAA, 0xBB],
+        }));
+        assert_eq!(j["key_tag"], 40714);
+        assert_eq!(j["algorithm"], 13);
+        assert_eq!(j["algorithm_name"], "ECDSAP256SHA256");
+        assert_eq!(j["digest_type"], 2);
+        assert_eq!(j["digest_type_name"], "SHA-256");
+        assert_eq!(j["digest"], "aabb");
+    }
+
+    #[test]
+    fn json_record_data_eui48() {
+        let j = json_record_data(Record::EUI48(EUI48 {
+            octets: [0x00, 0x11, 0x22, 0x33, 0x44, 0x55],
+        }));
+        assert_eq!(j["identifier"], "00-11-22-33-44-55");
+    }
+
+    #[test]
+    fn json_record_data_eui64() {
+        let j = json_record_data(Record::EUI64(EUI64 {
+            octets: [0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77],
+        }));
+        assert_eq!(j["identifier"], "00-11-22-33-44-55-66-77");
+    }
+
+    #[test]
+    fn json_record_data_hinfo() {
+        let j = json_record_data(Record::HINFO(HINFO {
+            cpu: b"Intel".to_vec().into_boxed_slice(),
+            os: b"Linux".to_vec().into_boxed_slice(),
+        }));
+        assert_eq!(j["cpu"], "Intel");
+        assert_eq!(j["os"], "Linux");
+    }
+
+    #[test]
+    fn json_record_data_mx() {
+        let j = json_record_data(Record::MX(MX {
+            preference: 10,
+            exchange: Labels::encode("mail.example.com").unwrap(),
+        }));
+        assert_eq!(j["preference"], 10);
+        assert_eq!(j["exchange"], "mail.example.com.");
+    }
+
+    #[test]
+    fn json_record_data_naptr() {
+        let j = json_record_data(Record::NAPTR(NAPTR {
+            order: 100,
+            preference: 10,
+            flags: b"u".to_vec().into_boxed_slice(),
+            service: b"E2U+sip".to_vec().into_boxed_slice(),
+            regex: b"!^.*$!sip:info@example.com!".to_vec().into_boxed_slice(),
+            replacement: Labels::encode(".").unwrap(),
+        }));
+        assert_eq!(j["order"], 100);
+        assert_eq!(j["flags"], "u");
+        assert_eq!(j["service"], "E2U+sip");
+        assert_eq!(j["regex"], "!^.*$!sip:info@example.com!");
+        assert_eq!(j["replacement"], "");
+    }
+
+    #[test]
+    fn json_record_data_ns() {
+        let j = json_record_data(Record::NS(NS {
+            nameserver: Labels::encode("ns1.example.com").unwrap(),
+        }));
+        assert_eq!(j["nameserver"], "ns1.example.com.");
+    }
+
+    #[test]
+    fn json_record_data_nsec() {
+        let j = json_record_data(Record::NSEC(NSEC {
+            next_domain: Labels::encode("beta.example.com").unwrap(),
+            types: vec![1, 2],
+        }));
+        assert_eq!(j["next_domain"], "beta.example.com.");
+        assert_eq!(j["types"][0], "A");
+        assert_eq!(j["types"][1], "NS");
+    }
+
+    #[test]
+    fn json_record_data_openpgpkey() {
+        let j = json_record_data(Record::OPENPGPKEY(OPENPGPKEY {
+            key: vec![1, 2, 3],
+        }));
+        assert_eq!(j["key"], "AQID");
+    }
+
+    #[test]
+    fn json_record_data_ptr() {
+        let j = json_record_data(Record::PTR(PTR {
+            cname: Labels::encode("host.example.com").unwrap(),
+        }));
+        assert_eq!(j["cname"], "host.example.com.");
+    }
+
+    #[test]
+    fn json_record_data_rrsig() {
+        let j = json_record_data(Record::RRSIG(RRSIG {
+            type_covered: 1,
+            algorithm: 13,
+            labels: 2,
+            original_ttl: 3600,
+            signature_expiration: 1000000,
+            signature_inception: 999000,
+            key_tag: 2371,
+            signer_name: Labels::encode("example.com").unwrap(),
+            signature: vec![0xAA, 0xBB, 0xCC, 0xDD],
+        }));
+        assert_eq!(j["type_covered"], 1);
+        assert_eq!(j["type_covered_name"], "A");
+        assert_eq!(j["algorithm"], 13);
+        assert_eq!(j["algorithm_name"], "ECDSAP256SHA256");
+        assert_eq!(j["labels"], 2);
+        assert_eq!(j["original_ttl"], 3600);
+        assert_eq!(j["signature_expiration"], 1000000);
+        assert_eq!(j["signature_inception"], 999000);
+        assert_eq!(j["key_tag"], 2371);
+        assert_eq!(j["signer_name"], "example.com.");
+        assert_eq!(j["signature"], "qrvM3Q==");
+    }
+
+    #[test]
+    fn json_record_data_sshfp() {
+        let j = json_record_data(Record::SSHFP(SSHFP {
+            algorithm: 1,
+            fingerprint_type: 1,
+            fingerprint: vec![0xAA, 0xBB],
+        }));
+        assert_eq!(j["algorithm"], 1);
+        assert_eq!(j["fingerprint_type"], 1);
+        assert_eq!(j["fingerprint"], "aabb");
+    }
+
+    #[test]
+    fn json_record_data_soa() {
+        let j = json_record_data(Record::SOA(SOA {
+            mname: Labels::encode("ns1.example.com").unwrap(),
+            rname: Labels::encode("admin.example.com").unwrap(),
+            serial: 2021010100,
+            refresh_interval: 3600,
+            retry_interval: 900,
+            expire_limit: 604800,
+            minimum_ttl: 86400,
+        }));
+        assert_eq!(j["mname"], "ns1.example.com.");
+        assert_eq!(j["rname"], "admin.example.com.");
+        assert_eq!(j["serial"], 2021010100u32);
+        assert_eq!(j["refresh"], 3600);
+        assert_eq!(j["retry"], 900);
+        assert_eq!(j["expire"], 604800);
+        assert_eq!(j["minimum"], 86400);
+    }
+
+    #[test]
+    fn json_record_data_srv() {
+        let j = json_record_data(Record::SRV(SRV {
+            priority: 10,
+            weight: 60,
+            port: 5060,
+            target: Labels::encode("sip.example.com").unwrap(),
+        }));
+        assert_eq!(j["priority"], 10);
+        assert_eq!(j["weight"], 60);
+        assert_eq!(j["port"], 5060);
+        assert_eq!(j["target"], "sip.example.com.");
+    }
+
+    #[test]
+    fn json_record_data_tlsa() {
+        let j = json_record_data(Record::TLSA(TLSA {
+            certificate_usage: 3,
+            selector: 1,
+            matching_type: 1,
+            certificate_data: vec![0xAA, 0xBB],
+        }));
+        assert_eq!(j["certificate_usage"], 3);
+        assert_eq!(j["selector"], 1);
+        assert_eq!(j["matching_type"], 1);
+        assert_eq!(j["certificate_data"], "aabb");
+    }
+
+    #[test]
+    fn json_record_data_txt() {
+        let j = json_record_data(Record::TXT(TXT {
+            messages: vec![b"v=spf1 include:example.com ~all".to_vec().into_boxed_slice()],
+        }));
+        assert_eq!(j["messages"][0], "v=spf1 include:example.com ~all");
+    }
+
+    #[test]
+    fn json_record_data_uri() {
+        let j = json_record_data(Record::URI(URI {
+            priority: 10,
+            weight: 1,
+            target: b"https://example.com".to_vec().into_boxed_slice(),
+        }));
+        assert_eq!(j["priority"], 10);
+        assert_eq!(j["weight"], 1);
+        assert_eq!(j["target"], "https://example.com");
+    }
+
+    #[test]
+    fn json_record_data_other() {
+        let j = json_record_data(Record::Other {
+            type_number: UnknownQtype::UnheardOf(9999),
+            bytes: vec![1, 2, 3],
+        });
+        assert_eq!(j["bytes"][0], 1);
+        assert_eq!(j["bytes"][1], 2);
+        assert_eq!(j["bytes"][2], 3);
+    }
+
+    // ============ json_queries tests ============
+
+    #[test]
+    fn json_queries_empty() {
+        let j = json_queries(vec![]);
+        assert_eq!(j.len(), 0);
+    }
+
+    #[test]
+    fn json_queries_single() {
+        let j = json_queries(vec![
+            Query {
+                qname: Labels::encode("example.com").unwrap(),
+                qclass: QClass::IN,
+                qtype: RecordType::A,
+            },
+        ]);
+        assert_eq!(j.len(), 1);
+        assert_eq!(j[0]["name"], "example.com.");
+        assert_eq!(j[0]["class"], "IN");
+        assert_eq!(j[0]["type"], "A");
+    }
+
+    #[test]
+    fn json_queries_multiple() {
+        let j = json_queries(vec![
+            Query {
+                qname: Labels::encode("example.com").unwrap(),
+                qclass: QClass::IN,
+                qtype: RecordType::A,
+            },
+            Query {
+                qname: Labels::encode("example.com").unwrap(),
+                qclass: QClass::IN,
+                qtype: RecordType::AAAA,
+            },
+        ]);
+        assert_eq!(j.len(), 2);
+        assert_eq!(j[0]["type"], "A");
+        assert_eq!(j[1]["type"], "AAAA");
+    }
+
+    // ============ json_answers tests ============
+
+    #[test]
+    fn json_answers_standard() {
+        let j = json_answers(vec![
+            Answer::Standard {
+                qname: Labels::encode("example.com").unwrap(),
+                qclass: QClass::IN,
+                ttl: 300,
+                record: Record::A(A { address: Ipv4Addr::new(93, 184, 216, 34) }),
+            },
+        ]);
+        assert_eq!(j.len(), 1);
+        assert_eq!(j[0]["name"], "example.com.");
+        assert_eq!(j[0]["class"], "IN");
+        assert_eq!(j[0]["ttl"], 300);
+        assert_eq!(j[0]["type"], "A");
+        assert_eq!(j[0]["data"]["address"], "93.184.216.34");
+    }
+
+    #[test]
+    fn json_answers_pseudo() {
+        let j = json_answers(vec![
+            Answer::Pseudo {
+                qname: Labels::encode(".").unwrap(),
+                opt: OPT {
+                    udp_payload_size: 4096,
+                    higher_bits: 0,
+                    edns0_version: 0,
+                    flags: 0,
+                    data: vec![],
+                },
+            },
+        ]);
+        assert_eq!(j.len(), 1);
+        assert_eq!(j[0]["type"], "OPT");
+        assert_eq!(j[0]["data"]["version"], 0);
+    }
+
+    #[test]
+    fn json_answers_empty() {
+        let j = json_answers(vec![]);
+        assert_eq!(j.len(), 0);
+    }
+
+    // ============ format_duration_hms tests ============
+
+    #[test]
+    fn duration_zero() {
+        assert_eq!(format_duration_hms(0), "0s");
+    }
+
+    #[test]
+    fn duration_seconds() {
+        assert_eq!(format_duration_hms(42), "42s");
+    }
+
+    #[test]
+    fn duration_59_seconds() {
+        assert_eq!(format_duration_hms(59), "59s");
+    }
+
+    #[test]
+    fn duration_minutes_seconds() {
+        assert_eq!(format_duration_hms(90), "1m30s");
+    }
+
+    #[test]
+    fn duration_59_minutes() {
+        assert_eq!(format_duration_hms(3599), "59m59s");
+    }
+
+    #[test]
+    fn duration_hours() {
+        assert_eq!(format_duration_hms(3661), "1h01m01s");
+    }
+
+    #[test]
+    fn duration_days() {
+        assert_eq!(format_duration_hms(90061), "1d1h01m01s");
+    }
+
+    // ============ TextFormat::record_payload_summary tests ============
+
+    #[test]
+    fn summary_a() {
+        let tf = TextFormat { format_durations: false };
+        let r = Record::A(A { address: Ipv4Addr::new(192, 0, 2, 1) });
+        assert_eq!(tf.record_payload_summary(r), "192.0.2.1");
+    }
+
+    #[test]
+    fn summary_aaaa() {
+        let tf = TextFormat { format_durations: false };
+        let r = Record::AAAA(AAAA {
+            address: Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1),
+        });
+        assert_eq!(tf.record_payload_summary(r), "2001:db8::1");
+    }
+
+    #[test]
+    fn summary_cname() {
+        let tf = TextFormat { format_durations: false };
+        let r = Record::CNAME(CNAME {
+            domain: Labels::encode("www.example.com").unwrap(),
+        });
+        assert_eq!(tf.record_payload_summary(r), "\"www.example.com.\"");
+    }
+
+    #[test]
+    fn summary_mx() {
+        let tf = TextFormat { format_durations: false };
+        let r = Record::MX(MX {
+            preference: 10,
+            exchange: Labels::encode("mail.example.com").unwrap(),
+        });
+        assert_eq!(tf.record_payload_summary(r), "10 \"mail.example.com.\"");
+    }
+
+    #[test]
+    fn summary_ns() {
+        let tf = TextFormat { format_durations: false };
+        let r = Record::NS(NS {
+            nameserver: Labels::encode("ns1.example.com").unwrap(),
+        });
+        assert_eq!(tf.record_payload_summary(r), "\"ns1.example.com.\"");
+    }
+
+    #[test]
+    fn summary_txt_single() {
+        let tf = TextFormat { format_durations: false };
+        let r = Record::TXT(TXT {
+            messages: vec![b"hello world".to_vec().into_boxed_slice()],
+        });
+        assert_eq!(tf.record_payload_summary(r), "\"hello world\"");
+    }
+
+    #[test]
+    fn summary_txt_multi() {
+        let tf = TextFormat { format_durations: false };
+        let r = Record::TXT(TXT {
+            messages: vec![
+                b"hello".to_vec().into_boxed_slice(),
+                b"world".to_vec().into_boxed_slice(),
+            ],
+        });
+        assert_eq!(tf.record_payload_summary(r), "\"hello\", \"world\"");
+    }
+
+    #[test]
+    fn summary_caa_critical() {
+        let tf = TextFormat { format_durations: false };
+        let r = Record::CAA(CAA {
+            critical: true,
+            tag: b"issue".to_vec().into_boxed_slice(),
+            value: b"letsencrypt.org".to_vec().into_boxed_slice(),
+        });
+        assert_eq!(tf.record_payload_summary(r),
+                   "\"issue\" \"letsencrypt.org\" (critical)");
+    }
+
+    #[test]
+    fn summary_caa_noncritical() {
+        let tf = TextFormat { format_durations: false };
+        let r = Record::CAA(CAA {
+            critical: false,
+            tag: b"issue".to_vec().into_boxed_slice(),
+            value: b"letsencrypt.org".to_vec().into_boxed_slice(),
+        });
+        assert_eq!(tf.record_payload_summary(r),
+                   "\"issue\" \"letsencrypt.org\" (non-critical)");
+    }
+
+    #[test]
+    fn summary_soa_raw() {
+        let tf = TextFormat { format_durations: false };
+        let r = Record::SOA(SOA {
+            mname: Labels::encode("ns1.example.com").unwrap(),
+            rname: Labels::encode("admin.example.com").unwrap(),
+            serial: 2021010100,
+            refresh_interval: 3600,
+            retry_interval: 900,
+            expire_limit: 604800,
+            minimum_ttl: 86400,
+        });
+        assert_eq!(tf.record_payload_summary(r),
+                   "\"ns1.example.com.\" \"admin.example.com.\" 2021010100 3600 900 604800 86400");
+    }
+
+    #[test]
+    fn summary_soa_formatted() {
+        let tf = TextFormat { format_durations: true };
+        let r = Record::SOA(SOA {
+            mname: Labels::encode("ns1.example.com").unwrap(),
+            rname: Labels::encode("admin.example.com").unwrap(),
+            serial: 2021010100,
+            refresh_interval: 3600,
+            retry_interval: 900,
+            expire_limit: 604800,
+            minimum_ttl: 86400,
+        });
+        assert_eq!(tf.record_payload_summary(r),
+                   "\"ns1.example.com.\" \"admin.example.com.\" 2021010100 1h00m00s 15m00s 7d0h00m00s 1d0h00m00s");
+    }
+
+    #[test]
+    fn summary_other() {
+        let tf = TextFormat { format_durations: false };
+        let r = Record::Other {
+            type_number: UnknownQtype::UnheardOf(9999),
+            bytes: vec![1, 2, 3],
+        };
+        assert_eq!(tf.record_payload_summary(r), "[1, 2, 3]");
     }
 }
